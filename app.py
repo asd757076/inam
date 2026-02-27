@@ -25,9 +25,22 @@ class E:
             t = t.replace(d, h)
         t = re.sub(r'integrity="[^"]+"', '', t)
         t = t.replace('Content-Security-Policy', 'X-Ignored-CSP')
+        
         if '<head>' in t:
-            i = f"<script>Object.defineProperty(window.location, 'hostname', {{get: () => '{h}'}});</script>"
-            t = t.replace('<head>', f"<head>{i}")
+            i = f"""
+            <script>
+                Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});
+                Object.defineProperty(window.location, 'host', {{ get: function() {{ return '{self.d}'; }} }});
+                Object.defineProperty(window.location, 'origin', {{ get: function() {{ return 'https://{self.d}'; }} }});
+                // تجاوز بعض فحوصات Instagram JS
+                if (typeof window._sharedData !== 'undefined') {{
+                    window._sharedData.config.viewerId = null;
+                    window._sharedData.config.csrf_token = 'fake_csrf_token';
+                }}
+                console.log('JS Spoofing Active!');
+            </script>
+            """
+            t = t.replace('<head>', f'<head>{i}')
         return t
 
 e = E()
