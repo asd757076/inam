@@ -1,5 +1,4 @@
 flask
-requests
-urllib3
-werkzeug
 gunicorn
+requests
+werkzeug
